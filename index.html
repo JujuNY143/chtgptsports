@@ -1,172 +1,93 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bench Warmers Ticker</title>
-  <style>
-    body { margin: 0; background: transparent; font-family: Arial, sans-serif; }
+<script>
+  const espnFeeds = [
+    { sport: "football", league: "nfl", label: "NFL" },
+    { sport: "soccer", league: "usa.1", label: "MLS" },
+    { sport: "football", league: "college-football", label: "NCAA Football" },
+    { sport: "basketball", league: "mens-college-basketball", label: "NCAA MBB" }
+  ];
 
-    .ticker-container {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 120px;
-      background: linear-gradient(90deg, #000814, #001d3d, #000814);
-      border-top: 3px solid #ffd60a;
-      box-shadow: 0 -5px 20px rgba(255, 214, 10, 0.3);
-      display: flex;
-      align-items: center;
-      overflow: hidden;
-      z-index: 9999;
+  async function fetchGoogleSheetNews() {
+    const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/PLACEHOLDER/pub?output=csv'; // replace with your link
+    try {
+      const res = await fetch(sheetUrl);
+      const text = await res.text();
+      return text.split('\n').slice(1).map(row => {
+        const [headline, breaking] = row.split(',');
+        return { content: headline?.trim(), breaking: breaking?.toLowerCase().includes('true') };
+      });
+    } catch {
+      return [];
     }
+  }
 
-    .ticker-header {
-      width: 250px;
-      height: 100%;
-      background: black;
-      color: white;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      font-weight: bold;
-      box-shadow: 2px 0 10px rgba(0,0,0,0.5);
-      z-index: 1000;
-      position: relative;
-    }
-
-    .brand-text {
-      font-size: 22px;
-      color: white;
-    }
-
-    .live-sports-text {
-      font-size: 16px;
-      color: red;
-      margin-top: 4px;
-    }
-
-    .ticker-content-wrapper {
-      position: relative;
-      overflow: hidden;
-      height: 100%;
-      flex-grow: 1;
-      z-index: 500;
-    }
-
-    .ticker-content {
-      white-space: nowrap;
-      display: flex;
-      align-items: center;
-      height: 100%;
-      animation: scroll 60s linear infinite;
-      padding-left: 20px;
-    }
-
-    @keyframes scroll {
-      0% { transform: translateX(100%); }
-      100% { transform: translateX(-100%); }
-    }
-
-    .ticker-item {
-      display: inline-flex;
-      align-items: center;
-      margin-right: 50px;
-      color: white;
-      font-size: 20px;
-    }
-
-    .news-item.breaking {
-      background: linear-gradient(135deg, #dc2626, #991b1b);
-      padding: 4px 10px;
-      border-radius: 10px;
-      font-weight: bold;
-      animation: pulse 1.5s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.8; transform: scale(1.05); }
-    }
-
-    .separator {
-      color: #ffd60a;
-      margin: 0 12px;
-      font-size: 26px;
-    }
-  </style>
-</head>
-<body>
-  <div class="ticker-container">
-    <div class="ticker-header">
-      <div class="brand-text">The Bench Warmers</div>
-      <div class="live-sports-text">LIVE SPORTS</div>
-    </div>
-    <div class="ticker-content-wrapper">
-      <div class="ticker-content" id="tickerContent">
-        <div class="ticker-item">
-          <span>Loading ESPN + Google Sheet + RSS data...</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    async function fetchGoogleSheetNews() {
-      const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/PLACEHOLDER/pub?output=csv'; // replace with your link
+  async function fetchRSSNews() {
+    const feeds = [
+      'https://www.espn.com/espn/rss/news',
+      'https://bleacherreport.com/articles/feed',
+      'https://news.google.com/rss/search?q=sports'
+    ];
+    const allNews = [];
+    for (const feed of feeds) {
       try {
-        const res = await fetch(sheetUrl);
-        const text = await res.text();
-        return text.split('\n').slice(1).map(row => {
-          const [headline, breaking] = row.split(',');
-          return { content: headline?.trim(), breaking: breaking?.toLowerCase().includes('true') };
+        const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(feed)}`);
+        const { contents } = await res.json();
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(contents, "application/xml");
+        const items = xml.querySelectorAll("item > title");
+        items.forEach((node, i) => {
+          if (i < 2) allNews.push({ content: node.textContent, breaking: false });
         });
-      } catch {
-        return [];
-      }
+      } catch {}
     }
+    return allNews;
+  }
 
-    async function fetchRSSNews() {
-      const feeds = [
-        'https://www.espn.com/espn/rss/news',
-        'https://bleacherreport.com/articles/feed',
-        'https://news.google.com/rss/search?q=sports'
-      ];
-      const allNews = [];
-      for (const feed of feeds) {
-        try {
-          const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(feed)}`);
-          const { contents } = await res.json();
-          const parser = new DOMParser();
-          const xml = parser.parseFromString(contents, "application/xml");
-          const items = xml.querySelectorAll("item > title");
-          items.forEach((node, i) => {
-            if (i < 2) allNews.push({ content: node.textContent, breaking: false });
+  async function fetchESPNScores() {
+    const scores = [];
+    for (const { sport, league, label } of espnFeeds) {
+      try {
+        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}/scoreboard`);
+        const data = await res.json();
+        if (!data.events) continue;
+
+        for (const game of data.events) {
+          const teams = game.competitions?.[0]?.competitors || [];
+          const status = game.status?.type?.shortDetail || "TBD";
+          const home = teams.find(t => t.homeAway === 'home');
+          const away = teams.find(t => t.homeAway === 'away');
+
+          scores.push({
+            content: `${label}: ${away.team.shortDisplayName} ${away.score} vs ${home.team.shortDisplayName} ${home.score} (${status})`,
+            breaking: false
           });
-        } catch {}
+        }
+      } catch (e) {
+        console.error(`Failed to load ${league}`, e);
       }
-      return allNews;
     }
+    return scores;
+  }
 
-    async function loadTicker() {
-      const sheetNews = await fetchGoogleSheetNews();
-      const rssNews = await fetchRSSNews();
-      const fallback = [{ content: "Follow The Bench Warmers for live updates", breaking: true }];
-      const combined = [...fallback, ...sheetNews, ...rssNews];
+  async function loadTicker() {
+    const [sheetNews, rssNews, scoreData] = await Promise.all([
+      fetchGoogleSheetNews(),
+      fetchRSSNews(),
+      fetchESPNScores()
+    ]);
 
-      const html = combined.map(n => `
-        <div class="ticker-item">
-          <div class="news-item ${n.breaking ? 'breaking' : ''}">${n.content}</div>
-        </div>
-      `).join('<span class="separator">•</span>');
+    const fallback = [{ content: "Follow The Bench Warmers for live updates", breaking: true }];
+    const combined = [...fallback, ...scoreData, ...sheetNews, ...rssNews];
 
-      document.getElementById("tickerContent").innerHTML = html;
-    }
+    const html = combined.map(n => `
+      <div class="ticker-item">
+        <div class="news-item ${n.breaking ? 'breaking' : ''}">${n.content}</div>
+      </div>
+    `).join('<span class="separator">•</span>');
 
-    loadTicker();
-    setInterval(loadTicker, 300000);
-  </script>
-</body>
-</html>
+    document.getElementById("tickerContent").innerHTML = html;
+  }
+
+  loadTicker();
+  setInterval(loadTicker, 300000);
+</script>
+
