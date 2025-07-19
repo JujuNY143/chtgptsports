@@ -73,13 +73,13 @@
       <div><span class="live-sports-text">LIVE SPORTS</span> • <span class="brand-text">The Bench Warmers</span></div>
     </div>
     <div class="ticker-content" id="tickerContent">
-      <div class="ticker-item"><span>Loading live updates...</span></div>
+      <div class="ticker-item"><span>Loading ESPN + Google Sheet + RSS data...</span></div>
     </div>
   </div>
 
   <script>
     async function fetchGoogleSheetNews() {
-      const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/PLACEHOLDER/pub?output=csv'; // 🔒 Your private Google Sheet
+      const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/PLACEHOLDER/pub?output=csv'; // replace with your link
       try {
         const res = await fetch(sheetUrl);
         const text = await res.text();
