@@ -1,119 +1,137 @@
-import fetch from 'node-fetch';
-import Parser from 'rss-parser';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bench Warmers Ticker</title>
+  <style>
+    body { margin: 0; background: transparent; font-family: Arial, sans-serif; }
+    .ticker-container {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 120px;
+      background: linear-gradient(90deg, #000814, #001d3d, #000814);
+      border-top: 3px solid #ffd60a;
+      box-shadow: 0 -5px 20px rgba(255, 214, 10, 0.3);
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      z-index: 9999;
+    }
+    .ticker-header {
+      width: 250px;
+      height: 100%;
+      background: black;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: bold;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+    }
+    .live-sports-text { color: red; }
+    .brand-text { color: white; }
+    .ticker-content {
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      height: 100%;
+      animation: scroll 60s linear infinite;
+      padding-left: 20px;
+    }
+    .ticker-item {
+      display: inline-flex;
+      align-items: center;
+      margin-right: 50px;
+      color: white;
+      font-size: 20px;
+    }
+    .news-item.breaking {
+      background: linear-gradient(135deg, #dc2626, #991b1b);
+      padding: 4px 10px;
+      border-radius: 10px;
+      font-weight: bold;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes scroll {
+      0% { transform: translateX(100%); }
+      100% { transform: translateX(-100%); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.05); }
+    }
+    .separator { color: #ffd60a; margin: 0 12px; font-size: 26px; }
+  </style>
+</head>
+<body>
+  <div class="ticker-container">
+    <div class="ticker-header">
+      <div><span class="live-sports-text">LIVE SPORTS</span> • <span class="brand-text">The Bench Warmers</span></div>
+    </div>
+    <div class="ticker-content" id="tickerContent">
+      <div class="ticker-item"><span>Loading live updates...</span></div>
+    </div>
+  </div>
 
-const parser = new Parser();
-
-export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    res.status(204).end();
-    return;
-  }
-
-  const sportsMap = {
-    MLB: ['baseball', 'mlb'],
-    NBA: ['basketball', 'nba'],
-    NFL: ['football', 'nfl'],
-    MLS: ['soccer', 'usa.1'],
-    NCAAF: ['football', 'college-football'],
-    NCAAB: ['basketball', 'mens-college-basketball'],
-  };
-
-  const today = new Date();
-  const games = [];
-  const news = [];
-
-  try {
-    for (const [sport, [group, league]] of Object.entries(sportsMap)) {
-      const url = `https://site.api.espn.com/apis/site/v2/sports/${group}/${league}/scoreboard`;
-      const resp = await fetch(url);
-      const data = await resp.json();
-
-      if (!data.events) continue;
-
-      for (const event of data.events) {
-        const comp = event.competitions[0];
-        const home = comp.competitors.find(t => t.homeAway === 'home');
-        const away = comp.competitors.find(t => t.homeAway === 'away');
-        const status = comp.status.type;
-
-        const isToday = new Date(event.date).toDateString() === today.toDateString();
-        const isLive = status.state === 'in';
-
-        if (isToday || isLive) {
-          games.push({
-            type: isLive || status.completed ? 'score' : 'upcoming',
-            sport,
-            emoji: getSportEmoji(sport),
-            team1: away?.team?.abbreviation || 'TBD',
-            team2: home?.team?.abbreviation || 'TBD',
-            score1: parseInt(away?.score ?? 0),
-            score2: parseInt(home?.score ?? 0),
-            status: formatGameStatus(comp, sport),
-          });
-        }
+  <script>
+    async function fetchGoogleSheetNews() {
+      const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/PLACEHOLDER/pub?output=csv'; // 🔒 Your private Google Sheet
+      try {
+        const res = await fetch(sheetUrl);
+        const text = await res.text();
+        return text.split('\\n').slice(1).map(row => {
+          const [headline, breaking] = row.split(',');
+          return { content: headline?.trim(), breaking: breaking?.toLowerCase().includes('true') };
+        });
+      } catch {
+        return [];
       }
     }
-  } catch (err) {
-    console.error('ESPN fetch failed', err);
-  }
 
-  try {
-    const feeds = [
-      'https://www.espn.com/espn/rss/news',
-      'https://www.bleacherreport.com/articles/feed',
-      'https://news.google.com/rss/search?q=sports&hl=en-US&gl=US&ceid=US:en'
-    ];
-
-    for (const feed of feeds) {
-      const parsed = await parser.parseURL(feed);
-      parsed.items.slice(0, 3).forEach(item => {
-        news.push({
-          type: 'news',
-          content: item.title,
-          breaking: false
-        });
-      });
+    async function fetchRSSNews() {
+      const feeds = [
+        'https://www.espn.com/espn/rss/news',
+        'https://bleacherreport.com/articles/feed',
+        'https://news.google.com/rss/search?q=sports'
+      ];
+      const allNews = [];
+      for (const feed of feeds) {
+        try {
+          const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(feed)}`);
+          const { contents } = await res.json();
+          const parser = new DOMParser();
+          const xml = parser.parseFromString(contents, "application/xml");
+          const items = xml.querySelectorAll("item > title");
+          items.forEach((node, i) => {
+            if (i < 2) allNews.push({ content: node.textContent, breaking: false });
+          });
+        } catch {}
+      }
+      return allNews;
     }
-  } catch (err) {
-    console.error('RSS fetch failed', err);
-  }
 
-  if (games.length === 0) {
-    news.unshift({
-      type: 'news',
-      content: 'Live scores unavailable — Showing sports headlines instead.',
-      breaking: true
-    });
-  }
+    async function loadTicker() {
+      const sheetNews = await fetchGoogleSheetNews();
+      const rssNews = await fetchRSSNews();
+      const fallback = [{ content: "Follow The Bench Warmers for live updates", breaking: true }];
+      const combined = [...fallback, ...sheetNews, ...rssNews];
 
-  res.status(200).json({ games, news });
-}
+      const html = combined.map(n => `
+        <div class="ticker-item">
+          <div class="news-item ${n.breaking ? 'breaking' : ''}">${n.content}</div>
+        </div>
+      `).join('<span class="separator">•</span>');
 
-function getSportEmoji(sport) {
-  return {
-    MLB: '⚾',
-    NBA: '🏀',
-    NFL: '🏈',
-    MLS: '⚽',
-    NCAAF: '🏈',
-    NCAAB: '🏀',
-  }[sport] || '🏆';
-}
+      document.getElementById("tickerContent").innerHTML = html;
+    }
 
-function formatGameStatus(comp, sport) {
-  const { type, displayClock, completed } = comp.status;
-
-  if (completed) return 'FINAL';
-  if (type.state === 'in') {
-    if (sport === 'MLS') return `${displayClock || ''}`;
-    return displayClock || type.shortDetail || 'LIVE';
-  }
-
-  const d = new Date(comp.date);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) + ' ET';
-}
+    loadTicker();
+    setInterval(loadTicker, 300000);
+  </script>
+</body>
+</html>
 
