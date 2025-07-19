@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Enhanced Sports Ticker</title>
+  <title>Enhanced Sports Ticker with Fallback</title>
   <style>
     body {
       margin: 0;
@@ -70,15 +70,15 @@
   </div>
 
   <script>
-    async function loadTicker() {
-      const API_KEY = '813745'; // your TheSportsDB API key
-      const today = new Date().toISOString().slice(0, 10);
+    async function loadGames(date) {
+      const API_KEY = '813745';
       const sports = {
         NBA: '🏀',
         MLB: '⚾',
         NFL: '🏈',
-        NHL: '🏒',
-        MLS: '⚽'
+        MLS: '⚽',
+        NCAAF: '🎓🏈',
+        NCAAB: '🎓🏀'
       };
 
       const tickerEl = document.getElementById("ticker-content");
@@ -86,7 +86,7 @@
 
       for (const sport in sports) {
         try {
-          const res = await fetch(`https://www.thesportsdb.com/api/v1/json/${API_KEY}/eventsday.php?d=${today}&s=${sport}`);
+          const res = await fetch(`https://www.thesportsdb.com/api/v1/json/${API_KEY}/eventsday.php?d=${date}&s=${sport}`);
           const data = await res.json();
           if (data.events) {
             for (const game of data.events) {
@@ -119,23 +119,48 @@
         }
       }
 
-      // Add News
+      // Add fallback news even if no games
       const news = [
         { content: 'MLB Trade Deadline approaching - Big moves expected', breaking: false },
         { content: 'NBA Summer League continues in Las Vegas', breaking: false },
         { content: 'NFL Training camps set to open soon', breaking: false },
         { content: '🔥 BREAKING: Follow The Bench Warmers for live sports alerts!', breaking: true }
       ];
-
       news.forEach(item => {
         output += `<span class="${item.breaking ? 'breaking-news' : ''}">📰 ${item.content}</span> ⚡ `;
       });
 
-      tickerEl.innerHTML = output;
+      tickerEl.innerHTML = output || "No games found today.";
     }
 
-    loadTicker();
-    setInterval(loadTicker, 300000); // refresh every 5 minutes
+    async function loadTickerWithFallback() {
+      const today = new Date();
+      const yesterday = new Date(today);
+      const tomorrow = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      tomorrow.setDate(today.getDate() + 1);
+
+      const formatDate = d => d.toISOString().split('T')[0];
+
+      // Try today
+      await loadGames(formatDate(today));
+
+      // If still no games after small delay, try yesterday then tomorrow
+      setTimeout(async () => {
+        if (document.getElementById("ticker-content").innerHTML.includes("No games")) {
+          await loadGames(formatDate(yesterday));
+        }
+      }, 1000);
+
+      setTimeout(async () => {
+        if (document.getElementById("ticker-content").innerHTML.includes("No games")) {
+          await loadGames(formatDate(tomorrow));
+        }
+      }, 2000);
+    }
+
+    loadTickerWithFallback();
+    setInterval(loadTickerWithFallback, 300000); // refresh every 5 minutes
   </script>
 </body>
 </html>
