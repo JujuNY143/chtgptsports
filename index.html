@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sports Ticker Overlay</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      overflow: hidden;
+    }
+
+    #sports-ticker {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      color: white;
+      font-size: 28px; /* Increased font size */
+      font-family: Arial, sans-serif;
+      white-space: nowrap;
+      overflow: hidden;
+      height: 50px; /* Slightly taller ticker bar */
+      z-index: 9999;
+    }
+
+    #ticker-content {
+      display: inline-block;
+      padding-left: 100%;
+      animation: scroll-left 25s linear infinite;
+    }
+
+    @keyframes scroll-left {
+      0% {
+        transform: translateX(0);
+      }
+      100% {
+        transform: translateX(-100%);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="sports-ticker">
+    <span id="ticker-content">Loading sports ticker...</span>
+  </div>
+
+  <script>
+    async function loadTicker() {
+      try {
+        const res = await fetch("https://your-vercel-project-name.vercel.app/api/scores"); // Replace with your actual Vercel URL
+        const data = await res.json();
+
+        const gameStrs = data.games.map(game => {
+          return `${game.emoji} ${game.team1} ${game.score1}-${game.score2} ${game.team2} (${game.status})`;
+        });
+
+        const newsStrs = data.news.map(n => `📰 ${n.content}`);
+
+        document.getElementById('ticker-content').textContent = [...gameStrs, ...newsStrs].join(" ⚡ ");
+      } catch (err) {
+        console.error("Error loading sports ticker:", err);
+        document.getElementById('ticker-content').textContent = "⚠️ Error loading scores.";
+      }
+    }
+
+    loadTicker();
+    setInterval(loadTicker, 300000); // Refresh every 5 minutes
+  </script>
+</body>
+</html>
