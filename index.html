@@ -3,14 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bench Warmers Ticker</title>
+  <title>The Bench Warmers Ticker</title>
   <style>
-    body {
-      margin: 0;
-      background: transparent;
-      font-family: Arial, sans-serif;
-    }
-
+    body { margin: 0; background: transparent; font-family: Arial, sans-serif; }
     .ticker-container {
       position: fixed;
       bottom: 0;
@@ -25,59 +20,28 @@
       overflow: hidden;
       z-index: 9999;
     }
-
     .ticker-header {
-      width: 270px;
+      width: 300px;
       height: 100%;
       background: black;
       color: white;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      flex-direction: column;
-      font-size: 18px;
       font-weight: bold;
-      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
-      z-index: 10;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.5);
     }
-
-    .brand-text {
-      color: white;
-      font-size: 20px;
-      font-weight: bold;
-    }
-
-    .live-sports-text {
-      color: red;
-      font-size: 16px;
-      font-weight: bold;
-    }
-
-    .ticker-content-wrapper {
-      position: relative;
-      flex: 1;
-      height: 100%;
-      overflow: hidden;
-    }
-
+    .brand-text { font-size: 22px; font-weight: bold; color: white; }
+    .live-sports-text { font-size: 14px; color: red; margin-top: 5px; }
     .ticker-content {
       white-space: nowrap;
       display: flex;
       align-items: center;
       height: 100%;
-      animation: scroll 60s linear infinite;
+      animation: scroll 120s linear infinite;
       padding-left: 20px;
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 1;
     }
-
-    @keyframes scroll {
-      0% { transform: translateX(100%); }
-      100% { transform: translateX(-100%); }
-    }
-
     .ticker-item {
       display: inline-flex;
       align-items: center;
@@ -85,7 +49,6 @@
       color: white;
       font-size: 20px;
     }
-
     .news-item.breaking {
       background: linear-gradient(135deg, #dc2626, #991b1b);
       padding: 4px 10px;
@@ -93,16 +56,19 @@
       font-weight: bold;
       animation: pulse 1.5s infinite;
     }
-
+    @keyframes scroll {
+      0% { transform: translateX(100%); }
+      100% { transform: translateX(-100%); }
+    }
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.8; transform: scale(1.05); }
     }
-
-    .separator {
-      color: #ffd60a;
-      margin: 0 12px;
-      font-size: 26px;
+    .separator { color: #ffd60a; margin: 0 12px; font-size: 26px; }
+    img.logo {
+      height: 20px;
+      margin: 0 5px;
+      vertical-align: middle;
     }
   </style>
 </head>
@@ -112,52 +78,51 @@
       <div class="brand-text">The Bench Warmers</div>
       <div class="live-sports-text">LIVE SPORTS</div>
     </div>
-    <div class="ticker-content-wrapper">
-      <div class="ticker-content" id="tickerContent">
-        <div class="ticker-item"><span>Loading scores and updates...</span></div>
-      </div>
+    <div class="ticker-content" id="tickerContent">
+      <div class="ticker-item"><span>Loading live sports scores & news...</span></div>
     </div>
   </div>
 
   <script>
-    const API_KEY = '813745'; // your sportsdb.com premium key
-    const sports = {
+    const API_KEY = '813745'; // Your TheSportsDB Premium API Key
+    const SPORTS = {
       NBA: '🏀',
       MLB: '⚾',
       NFL: '🏈',
       MLS: '⚽',
-      "NCAA Football": '🎓🏈',
-      "NCAA Men's Basketball": '🎓🏀'
+      "NCAA Football": '🏈',
+      "NCAA Men's Basketball": '🏀'
     };
 
     async function fetchGames() {
-      const today = new Date().toISOString().slice(0, 10);
       const results = [];
+      const today = new Date().toISOString().slice(0, 10);
 
-      for (const sport in sports) {
-        const urlSport = sport === "NCAA Football" ? "American Football" :
-                         sport === "NCAA Men's Basketball" ? "Basketball" : sport;
+      for (const sport in SPORTS) {
+        const emoji = SPORTS[sport];
+        const url = `https://www.thesportsdb.com/api/v1/json/${API_KEY}/eventsday.php?d=${today}&s=${encodeURIComponent(sport)}`;
 
         try {
-          const url = `https://www.thesportsdb.com/api/v1/json/${API_KEY}/eventsday.php?d=${today}&s=${encodeURIComponent(urlSport)}`;
-          const res = await fetch(url);
-          const data = await res.json();
+          const response = await fetch(url);
+          const data = await response.json();
+          if (!data.events || data.events.length === 0) continue;
 
-          if (data && data.events) {
-            for (const game of data.events) {
-              results.push({
-                sport,
-                emoji: sports[sport],
-                team1: game.strHomeTeam,
-                team2: game.strAwayTeam,
-                score1: game.intHomeScore ?? '',
-                score2: game.intAwayScore ?? '',
-                status: game.strStatus ?? game.strTime ?? 'Scheduled'
-              });
-            }
+          for (const game of data.events) {
+            results.push({
+              type: 'score',
+              content: `
+                ${emoji} ${sport}: 
+                ${game.strAwayTeam ? `<img src="${game.strAwayTeamBadge}" class="logo" onerror="this.style.display='none'"/> ${game.strAwayTeam}` : ''}
+                ${game.intAwayScore ?? ''} vs 
+                ${game.strHomeTeam ? `<img src="${game.strHomeTeamBadge}" class="logo" onerror="this.style.display='none'"/> ${game.strHomeTeam}` : ''}
+                ${game.intHomeScore ?? ''} 
+                (${game.strStatus ?? game.strTime ?? 'Scheduled'})
+              `,
+              breaking: false
+            });
           }
         } catch (err) {
-          console.error(`Error fetching ${sport}`, err);
+          console.error("Error fetching for", sport, err.message);
         }
       }
 
@@ -165,26 +130,13 @@
     }
 
     async function loadTicker() {
-      const games = await fetchGames();
+      const scoreData = await fetchGames();
+      const fallback = [{ content: "Follow The Bench Warmers for sports updates", breaking: true }];
+      const combined = scoreData.length ? scoreData : fallback;
 
-      let content = [];
-
-      if (games.length === 0) {
-        content.push({
-          type: 'news',
-          content: 'No games today – stay tuned for breaking sports news!',
-          breaking: true
-        });
-      } else {
-        content = games.map(g => ({
-          type: 'score',
-          text: `${g.emoji} ${g.sport}: ${g.team1} ${g.score1} vs ${g.team2} ${g.score2} (${g.status})`
-        }));
-      }
-
-      const html = content.map(item => `
+      const html = combined.map(n => `
         <div class="ticker-item">
-          <div class="news-item ${item.breaking ? 'breaking' : ''}">${item.text || item.content}</div>
+          <div class="news-item ${n.breaking ? 'breaking' : ''}">${n.content}</div>
         </div>
       `).join('<span class="separator">•</span>');
 
@@ -192,8 +144,7 @@
     }
 
     loadTicker();
-    setInterval(loadTicker, 300000);
+    setInterval(loadTicker, 300000); // every 5 minutes
   </script>
 </body>
 </html>
-
